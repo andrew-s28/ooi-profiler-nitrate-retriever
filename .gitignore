@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+env/
+*.env
+
+# IDE
+.idea/
+.vscode/
+
+# Compiled files
+*.pyc
+*.pyo
+*.pyd
+
+# Logs and databases
+*.log
+*.sqlite3
+
+# Dependency directories
+lib/
+libs/
+library/
+libraries/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Miscellaneous
+*.bak
+*.swp
+*.tmp
+*~
+
+# IPython Notebook
+*.ipynb_checkpoints
+*.ipynb
+
+# Data files
+*.csv
+*.json
+*.xls
+*.xlsx
+*.nc

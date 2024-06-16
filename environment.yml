@@ -1,0 +1,18 @@
+name: ooi
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - pip
+  - pip:
+    - beautifulsoup4
+    - flox
+    - gsw
+    - joblib
+    - requests
+    - scipy
+    - tqdm
+    - xarray[io]
