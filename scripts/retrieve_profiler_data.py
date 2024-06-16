@@ -356,7 +356,7 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--end', metavar='end', type=str, nargs='?', default=datetime.now().strftime('%Y-%m-%d'),
                         help=f"End date in YYYY-MM-DD format (default: {datetime.now().strftime('%Y-%m-%d')})")
     parser.add_argument('-n', '--njobs', metavar='njobs', type=int, nargs='?',
-                        help="number of jobs to run in parallel - see joblib.Parallel docs for more details",
+                        help="number of jobs to run in parallel when running quality control - see joblib.Parallel docs for more details",
                         default=-2)
     args = parser.parse_args()
     args = vars(args)
