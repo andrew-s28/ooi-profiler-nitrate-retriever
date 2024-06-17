@@ -454,16 +454,22 @@ if __name__ == '__main__':
         if datetime.strptime(start_date, '%Y-%m-%d') < pd.to_datetime(pd.Timestamp(ds_bin.time.min().values)):
             save_start_date = pd.to_datetime(pd.Timestamp(ds_bin.time.min().values))
             save_start_date = save_start_date.strftime('%Y-%m-%d')
+        else:
+            save_start_date = start_date
         if datetime.strptime(end_date, '%Y-%m-%d') > pd.to_datetime(pd.Timestamp(ds_bin.time.max().values)):
             save_end_date = pd.to_datetime(pd.Timestamp(ds_bin.time.max().values))
             save_end_date = save_end_date.strftime('%Y-%m-%d')
+        else:
+            save_end_date = end_date
         out_file = site + '_nitrate_binned_' + save_start_date + '_' + save_end_date + '.nc'
 
         # save output files
         ds_bin.to_netcdf(os.path.join(out_path, out_file))
         ds_bin.close()
         for d in ds:
-            d.to_netcdf(os.path.join(out_path, f'raw/dep{d.deployment[0]:02.0f}_' + d.attrs['source'] + '.nc'), mode='w')
+            save_start_date = pd.to_datetime(pd.Timestamp(d.time.min().values))
+            save_end_date = pd.to_datetime(pd.Timestamp(d.time.max().values))
+            d.to_netcdf(os.path.join(out_path, f'raw/{site}_dep{d.deployment[0]:02.0f}_{save_start_date}_{save_end_date}.nc'), mode='w')
         # for d in deployments:
         #     deployment = np.unique(d.deployment)[0]
         #     d.to_netcdf(os.path.join(out_path, f'deps/dep{deployment:02.0f}_binned.nc'), mode='w')
