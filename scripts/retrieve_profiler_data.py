@@ -13,116 +13,15 @@ import warnings
 # External Modules
 from bs4 import BeautifulSoup
 import gsw
-from joblib import Parallel, delayed
 import numpy as np
 import pandas as pd
 import requests
-from scipy.optimize import curve_fit
 from tqdm import tqdm as tq
 import xarray as xr
 from flox.xarray import xarray_reduce
 
 
-class ParallelTqdm(Parallel):
-    """joblib.Parallel, but with a tqdm progressbar
-    From https://gist.github.com/tsvikas/5f859a484e53d4ef93400751d0a116de
-
-    Additional parameters:
-    ----------------------
-    total_tasks: int, default: None
-        the number of expected jobs. Used in the tqdm progressbar.
-        If None, try to infer from the length of the called iterator, and
-        fallback to use the number of remaining items as soon as we finish
-        dispatching.
-        Note: use a list instead of an iterator if you want the total_tasks
-        to be inferred from its length.
-
-    desc: str, default: None
-        the description used in the tqdm progressbar.
-
-    disable_progressbar: bool, default: False
-        If True, a tqdm progressbar is not used.
-
-    show_joblib_header: bool, default: False
-        If True, show joblib header before the progressbar.
-
-    Removed parameters:
-    -------------------
-    verbose: will be ignored
-
-
-    Usage:
-    ------
-    >>> from joblib import delayed
-    >>> from time import sleep
-    >>> ParallelTqdm(n_jobs=-1)([delayed(sleep)(.1) for _ in range(10)])
-    80%|████████  | 8/10 [00:02<00:00,  3.12tasks/s]
-
-    """
-
-    def __init__(
-        self,
-        *,
-        total_tasks: int | None = None,
-        desc: str | None = None,
-        disable_progressbar: bool = False,
-        show_joblib_header: bool = False,
-        **kwargs
-    ):
-        if "verbose" in kwargs:
-            raise ValueError(
-                "verbose is not supported. "
-                "Use show_progressbar and show_joblib_header instead."
-            )
-        super().__init__(verbose=(1 if show_joblib_header else 0), **kwargs)
-        self.total_tasks = total_tasks
-        self.desc = desc
-        self.disable_progressbar = disable_progressbar
-        self.progress_bar = None
-
-    def __call__(self, iterable):
-        try:
-            if self.total_tasks is None:
-                # try to infer total_tasks from the length of the called iterator
-                try:
-                    self.total_tasks = len(iterable)
-                except (TypeError, AttributeError):
-                    pass
-            # call parent function
-            return super().__call__(iterable)
-        finally:
-            # close tqdm progress bar
-            if self.progress_bar is not None:
-                self.progress_bar.close()
-
-    __call__.__doc__ = Parallel.__call__.__doc__
-
-    def dispatch_one_batch(self, iterator):
-        # start progress_bar, if not started yet.
-        if self.progress_bar is None:
-            self.progress_bar = tq(
-                desc=self.desc,
-                total=self.total_tasks,
-                disable=self.disable_progressbar,
-                unit="tasks",
-            )
-        # call parent function
-        return super().dispatch_one_batch(iterator)
-
-    dispatch_one_batch.__doc__ = Parallel.dispatch_one_batch.__doc__
-
-    def print_progress(self):
-        """Display the process of the parallel execution using tqdm"""
-        # if we finish dispatching, find total_tasks from the number of remaining items
-        if self.total_tasks is None and self._original_iterator is None:
-            self.total_tasks = self.n_dispatched_tasks
-            self.progress_bar.total = self.total_tasks
-            self.progress_bar.refresh()
-        # update progressbar
-        self.progress_bar.update(self.n_completed_tasks - self.progress_bar.n)
-
-
-def _filter_dates(nc_files, start_date, end_date):
+def _filter_dates(nc_files: list, start_date: str, end_date: str) -> list:
     date_regex = r'[0-9]+T[0-9]+\.[0-9]+-[0-9]+T[0-9]+\.[0-9]+'
     start_date = datetime.strptime(start_date, '%Y-%m-%d')
     end_date = datetime.strptime(end_date, '%Y-%m-%d')
@@ -136,7 +35,7 @@ def _filter_dates(nc_files, start_date, end_date):
     return nc_files
 
 
-def _get_attrs(ds):
+def _get_attrs(ds) -> tuple[dict, dict]:
     global_attrs = ds.attrs
     var_attrs = {}
     for var in list(ds.variables):
@@ -144,14 +43,14 @@ def _get_attrs(ds):
     return global_attrs, var_attrs
 
 
-def _assign_attrs(ds, global_attrs, var_attrs):
+def _assign_attrs(ds: xr.Dataset, global_attrs: dict, var_attrs: dict) -> xr.Dataset:
     ds.attrs = global_attrs
     for var in list(ds.variables):
         ds[var].attrs = var_attrs[var]
     return ds
 
 
-def list_files(url, tag=r'.*\.nc$') -> list[str]:
+def list_files(url: str, start_date: str, end_date: str, tag=r'.*\.nc$') -> list[str]:
     """
     Function to create a list of the netCDF data files in the THREDDS catalog
     created by a request to the M2M system. Obtained from 2022 OOIFB workshop
@@ -174,49 +73,172 @@ def list_files(url, tag=r'.*\.nc$') -> list[str]:
     return nc_files
 
 
-def _comput_tsrho(ds):
+def _drop_unused_vars(ds: xr.Dataset) -> xr.Dataset:
+    ds = ds.drop_vars([
+        'nutnr_nitrogen_in_nitrate_qc_executed',
+        'nutnr_spectrum_average',
+        'nutnr_fit_base_2',
+        'nutnr_fit_base_1',
+        'year',
+        'salinity_corrected_nitrate_qartod_results',
+        'salinity_corrected_nitrate_qc_results',
+        'sea_water_pressure_qc_executed',
+        'nutnr_current_main',
+        'sea_water_practical_salinity_qc_executed',
+        'nitrate_concentration_qc_results',
+        'humidity',
+        'voltage_main',
+        'sea_water_pressure_qc_results',
+        'spectral_channels',
+        'temp_spectrometer',
+        'temp_lamp',
+        'day_of_year',
+        'nutnr_nitrogen_in_nitrate',
+        'nitrate_concentration',
+        'nutnr_absorbance_at_254_nm',
+        'nutnr_absorbance_at_350_nm',
+        'temp_interior',
+        'nutnr_bromide_trace',
+        'sea_water_temperature_qc_results',
+        'nutnr_integration_time_factor',
+        'lamp_time',
+        'nitrate_concentration_qc_executed',
+        'time_of_sample',
+        'nutnr_nitrogen_in_nitrate_qc_results',
+        'nitrate_concentration_qartod_results',
+        'sea_water_practical_salinity_qc_results',
+        'sea_water_temperature_qc_executed',
+        'nutnr_voltage_int',
+        'salinity_corrected_nitrate_qc_executed',
+        'suspect_timestamp',
+        'aux_fitting_1',
+        'nutnr_fit_rmse',
+        'dark_val',
+        'aux_fitting_2',
+        'voltage_lamp',
+    ]).drop(
+        'wavelength'
+    )
+    return ds
+
+
+def _comput_tsrho(ds: xr.Dataset) -> xr.Dataset:
+    # renames and computes variables
     ds = ds.swap_dims({'obs': 'time'})
-    # sea_water_temperature and sea_water_practical_salinity have junk values from CTD
-    ds = ds.drop_vars(['sea_water_temperature', 'sea_water_practical_salinity'])
+    # sea_water_temperature and sea_water_practical_salinity have junk values
+    ds = ds.drop_vars(['sea_water_temperature', 'sea_water_practical_salinity', 'sea_water_pressure'])
     ds = ds.rename({
-        'ctdpf_j_cspp_instrument_recovered-sea_water_temperature': 'sea_water_temperature',
-        'ctdpf_j_cspp_instrument_recovered-sea_water_practical_salinity': 'sea_water_practical_salinity',
-        'nutnr_dark_value_used_for_fit': 'dark_val'
+        'ctdpf_j_cspp_instrument_recovered-sea_water_temperature': 'temperature',
+        'ctdpf_j_cspp_instrument_recovered-sea_water_practical_salinity': 'practical_salinity',
+        'nutnr_dark_value_used_for_fit': 'dark_val',
+        'int_ctd_pressure': 'pressure',
         })
-    ds['sea_water_absolute_salinity'] = gsw.conversions.SA_from_SP(
-        SP=ds['sea_water_practical_salinity'],
-        p=ds['int_ctd_pressure'],
+    ds['absolute_salinity'] = gsw.conversions.SA_from_SP(
+        SP=ds['practical_salinity'],
+        p=ds['pressure'],
         lon=ds['lon'],
         lat=ds['lat']
     )
-    ds['sea_water_absolute_salinity'].attrs = {
+    ds['absolute_salinity'].attrs = {
         'long_name': 'Seawater Absolute Salinity',
         'standard_name': 'sea_water_absolute_salinity',
         'units': 'g/kg'
     }
-    ds['sea_water_conservative_temperature'] = gsw.conversions.CT_from_t(
-        SA=ds['sea_water_absolute_salinity'],
-        t=ds['sea_water_temperature'],
-        p=ds['int_ctd_pressure']
-    ).expand_dims('reference_pressure').assign_coords({'reference_pressure': [0]})
-    ds.sea_water_conservative_temperature.attrs = {
+    ds['conservative_temperature'] = gsw.conversions.CT_from_t(
+        SA=ds['absolute_salinity'],
+        t=ds['temperature'],
+        p=ds['pressure']
+    )
+    ds['conservative_temperature'].attrs = {
         'long_name': 'Seawater Conservative Temperature',
         'standard_name': 'sea_water_conservative_temperature',
         'units': 'degrees_Celsius',
         'units_metadata': 'temperature: on_scale'
     }
-    ds['sea_water_sigma_theta'] = gsw.density.sigma0(
-        SA=ds['sea_water_absolute_salinity'],
-        CT=ds['sea_water_conservative_temperature']
-    ).assign_coords({'reference_pressure': [0]})
-    ds['sea_water_sigma_theta'].attrs = {
+    ds['sigma_t'] = gsw.density.rho(
+        SA=ds['absolute_salinity'],
+        CT=ds['conservative_temperature'],
+        p=ds['pressure']
+    ) - 1000
+    ds['sigma_t'].attrs = {
+        'long_name': 'Seawater Density Anomaly',
+        'standard_name': 'sea_water_sigma_t',
+        'units': 'kg/m^3',
+    }
+    ds['sigma_theta'] = gsw.density.sigma0(
+        SA=ds['absolute_salinity'],
+        CT=ds['conservative_temperature']
+    )
+    ds['sigma_theta'].attrs = {
         'long_name': 'Seawater Potential Density Anomaly',
         'standard_name': 'sea_water_sigma_theta',
-        'units': 'kg/m^3'}
+        'units': 'kg/m^3',
+        'reference_pressure': 0
+    }
     return ds
 
 
-def nutnr_qc(ds, rmse_lim=1000) -> xr.Dataset:
+def _nutnr_qc(
+    spectral_channels: np.ndarray,
+    dark_val: np.ndarray,
+    salinity: np.ndarray,
+    time: np.ndarray,
+    rmse_lim: float,
+) -> tuple[np.ndarray, np.ndarray, int, int, int, int]:
+    # does the actual QC as vectorized numpy operations
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Mean of empty slice")
+        warnings.filterwarnings("ignore", message="Degrees of freedom <= 0 for slice")
+        warnings.filterwarnings("ignore", message="invalid value encountered in log10")
+        warnings.filterwarnings("ignore", message="divide by zero encountered in log10")
+
+        wavelengths = np.arange(190, 394.01, .8)[30:]
+        spectral_channels = (spectral_channels.T - dark_val).T[:, 30:]
+        mask = np.full(time.shape, True, dtype=bool)
+        a_all = np.empty(len(time))
+        a_all[:] = np.nan
+        step_1, step_2, step_3, step_4 = 0, 0, 0, 0
+
+        # mask observations with low salinity values
+        mask[(salinity <= 28) & (mask)] = False
+        step_1 = np.count_nonzero(~mask)
+
+        # mask spectra with non-finite or negative values
+        mask[(np.any(~np.isfinite(spectral_channels), axis=1)) & (mask)] = False
+        mask[(np.any(spectral_channels <= 0, axis=1)) & (mask)] = False
+        step_2 = np.count_nonzero(~mask) - step_1
+
+        # fit spectra to linear model between wavelengths ~360 nm to 380 nm and remove bad fits 
+        wl_fit = wavelengths[217-30:241-30]
+        spec_fit = np.log10(spectral_channels[:, 217-30:241-30])
+        rmse_all = np.empty(len(spec_fit))
+        rmse_all[:] = np.nan
+        for i, sp in enumerate(spec_fit):
+            if np.any(~np.isfinite(sp)):
+                if mask[i]:
+                    print("Why is this happening? This shouldn't be happening.") # any non-finite values should have been removed in step 2
+                    mask[i] = False
+                    step_2 += 1
+            else:
+                a, ssres, _, _ = np.linalg.lstsq(np.vstack([np.ones(wl_fit.shape), wl_fit]).T, sp, rcond=None)
+                residuals = sp - wl_fit*a[1] - a[0]
+                rmse = np.sqrt(np.sum(residuals**2)/(residuals.size-2))
+                rmse_all[i] = rmse
+                if rmse > rmse_lim:
+                    if mask[i]:
+                        mask[i] = False
+                        step_3 += 1
+                else:
+                    a_all[i] = a[1]
+
+        # remove spectra with slope far from the mean slope
+        a_all[~mask] = np.nan
+        mask[(np.abs(a_all - np.nanmean(a_all)) >= 3*np.nanstd(a_all)) & (mask)] = False
+        step_4 = np.count_nonzero(~mask) - step_1 - step_2 - step_3
+    return mask, a_all, step_1, step_2, step_3, step_4
+
+
+def _nutnr_qc_wrapper(ds: xr.Dataset, rmse_lim: float = 0.02) -> xr.Dataset:
     """
     Remove bad fits in OOI nutnr datasets
 
@@ -224,40 +246,20 @@ def nutnr_qc(ds, rmse_lim=1000) -> xr.Dataset:
         ds (Dataset): OOI nutnr dataset
         rmse_lim (int, optional): Maximum RMSE for fit to be kept. Defaults to 1000.
     """
-    # covariance issues are explicitly handled by checking if pcov is finite
-    warnings.filterwarnings("ignore", message="Covariance of the parameters could not be estimated")
-
-    temp = ds.sel({'wavelength': slice(217, 240)})
-    mask = np.full(ds.time.shape, True, dtype=bool)
-    for i in range(len(temp.time)):
-        # remove fits if any values are nan or inf
-        if np.any(~np.isfinite(temp.spectral_channels[i] - temp.dark_val[i])):
-            mask[i] = False
-        # remove anomalously low salinity values
-        elif ds.sea_water_practical_salinity[i] <= 20:
-            mask[i] = False
-        # remove fits where mean is near zero
-        elif (ds.spectral_channels[i].mean() > 1000):
-            (a, b), pcov = curve_fit(lambda x, a, b: a*x + b,
-                                     temp.wavelength,
-                                     temp.spectral_channels[i] - temp.dark_val[i],
-                                     p0=[-100, 10000], ftol=0.01, xtol=0.01)
-            residuals = temp.spectral_channels[i] - temp.dark_val[i] - temp.wavelength*a - b
-            rmse = ((np.sum(residuals**2)/(residuals.size-2))**0.5).values
-            # remove fits with high rmse for linear fit in wavelength range
-            if rmse > rmse_lim:
-                mask[i] = False
-            # remove fits with any negative values in wavelength range
-            elif np.any(temp.spectral_channels[i] - temp.dark_val[i] < 0):
-                mask[i] = False
-            # remove fits that did not converge
-            elif np.any(~np.isfinite(pcov)):
-                mask[i] = False
+    # provide numpy arrays to apply QC
+    mask, a_all, step_1, step_2, step_3, step_4 = _nutnr_qc(
+        ds.spectral_channels.values,
+        ds.dark_val.values,
+        ds.practical_salinity.values,
+        ds.time.values,
+        rmse_lim=rmse_lim
+    )
+    # mask the data
     ds = ds.where(xr.DataArray(mask, coords={'time': ds.time.values}), drop=True)
-    return ds
+    return ds, len(ds.time.values), step_1, step_2, step_3, step_4
 
 
-def split_profiles(ds):
+def split_profiles(ds: xr.Dataset) -> list:
     """
     Split the data set into individual profiles, where each profile is a
     collection of data from a single deployment and profile sequence. The
@@ -273,6 +275,7 @@ def split_profiles(ds):
     profiles = []
     jback = np.timedelta64(30, 's')  # 30 second jump back to avoid collecting data from the following profile
     for i, d in enumerate(dt):
+        # print(d)
         # pull out the profile
         if i == 0:
             profile = ds.sel(time=slice(ds['time'].values[0], d - jback))
@@ -288,7 +291,7 @@ def split_profiles(ds):
     return profiles
 
 
-def profiler_binning(d, z, z_lab='depth', t_lab='time', offset=0.5):
+def profiler_binning(d, z, z_lab='depth', t_lab='time', offset=0.5) -> xr.DataArray | xr.Dataset:
     """
     Bins a profiler time series into daily bins and depth bins.
     Removes any non-numeric data types, including any time types,
@@ -341,8 +344,7 @@ def profiler_binning(d, z, z_lab='depth', t_lab='time', offset=0.5):
     return out
 
 
-if __name__ == '__main__':
-    # parse command line arguments
+def _parse_args() -> tuple[str, str, str, str]:
     parser = argparse.ArgumentParser(
         description="Download OOI Endurance Array profiler nitrate data, QC fits, bin, and save."
     )
@@ -355,56 +357,115 @@ if __name__ == '__main__':
                         help="Start date in YYYY-MM-DD format (default: 2010-01-01)")
     parser.add_argument('-e', '--end', metavar='end', type=str, nargs='?', default=datetime.now().strftime('%Y-%m-%d'),
                         help=f"End date in YYYY-MM-DD format (default: {datetime.now().strftime('%Y-%m-%d')})")
-    parser.add_argument('-n', '--njobs', metavar='njobs', type=int, nargs='?',
-                        help="number of jobs to run in parallel when running quality control - see joblib.Parallel docs for more details",
-                        default=-2)
     args = parser.parse_args()
     args = vars(args)
     sites = args['site']
     out_path = args['path']
     start_date = args['start']
     end_date = args['end']
-    n_jobs = args['njobs']
+    sites = [site.upper() for site in sites]
+    return sites, out_path, start_date, end_date
+
+
+def _make_dirs(out_path: str, site: str) -> None:
+    if not os.path.exists(out_path):
+        os.mkdir(out_path)
+    out_path = os.path.join(out_path, site)
+    if not os.path.exists(out_path):
+        os.mkdir(out_path)
+    if not os.path.exists(os.path.join(out_path, 'raw')):
+        os.mkdir(os.path.join(out_path, 'raw'))
+    # if not os.path.exists(os.path.join(out_path, 'qced')):
+    #     os.mkdir(os.path.join(out_path, 'qced'))
+    # if not os.path.exists(os.path.join(out_path, 'binned')):
+    #     os.mkdir(os.path.join(out_path, 'binned'))
+    return out_path
+
+
+def _get_datasets(site: str, start_date: str, end_date: str) -> list:
+    if site == 'CE01ISSP':
+        # setup defaults to use in subsequent data queries
+        refdes = site + "-SP001-06-NUTNRJ000"
+        method = "recovered_cspp"
+        stream = "nutnr_j_cspp_instrument_recovered"
+    elif site == 'CE02SHSP':
+        refdes = site + "-SP001-05-NUTNRJ000"
+        method = "recovered_cspp"
+        stream = "nutnr_j_cspp_instrument_recovered"
+    else:
+        raise ValueError("Invalid site selection, choose one or more of CE01ISSP (Oregon inshore) or CE02SHSP (Oregon midshelf).")
+
+    # construct the OOI Gold Copy THREDDS catalog URL for this data set
+    base_url = "https://thredds.dataexplorer.oceanobservatories.org/thredds/catalog/ooigoldcopy/public/"
+    url = base_url + ('-').join([refdes, method, stream]) + '/catalog.html'
+    tag = r'NUTNRJ000.*.nc$'  # setup regex for files we want
+    nc_files = list_files(url, start_date, end_date, tag)
+    base_url = 'https://thredds.dataexplorer.oceanobservatories.org/thredds/fileServer/'
+    nc_url = [base_url + i + '#mode=bytes' for i in nc_files]  # create urls for download
+    # nc_url = nc_url[:5]
+    # load datasets
+    ds = []
+    for i, f in (enumerate(tq(nc_url, desc='Downloading datasets'))):
+        r = requests.get(f, timeout=(3.05, 120))
+        if r.ok:
+            ds.append(xr.open_dataset(io.BytesIO(r.content)))
+            ds[i].load()
+    return ds
+
+
+if __name__ == '__main__':
+    # parse command line arguments
+    sites, out_path_top, start_date, end_date = _parse_args()
 
     for site in sites:
-        site = site.upper()
-        if site == 'CE01ISSP':
-            # setup defaults to use in subsequent data queries
-            refdes = site + "-SP001-06-NUTNRJ000"
-            method = "recovered_cspp"
-            stream = "nutnr_j_cspp_instrument_recovered"
-        elif site == 'CE02SHSP':
-            refdes = site + "-SP001-05-NUTNRJ000"
-            method = "recovered_cspp"
-            stream = "nutnr_j_cspp_instrument_recovered"
-        else:
-            raise ValueError("Invalid site selection, choose one or more of CE01ISSP (Oregon inshore) or CE02SHSP (Oregon midshelf).")
+        # setup output folders
+        out_path = _make_dirs(out_path_top, site)
 
-        # construct the OOI Gold Copy THREDDS catalog URL for this data set
-        base_url = "https://thredds.dataexplorer.oceanobservatories.org/thredds/catalog/ooigoldcopy/public/"
-        url = base_url + ('-').join([refdes, method, stream]) + '/catalog.html'
-        tag = r'NUTNRJ000.*.nc$'  # setup regex for files we want
-        nc_files = list_files(url, tag)
-        base_url = 'https://thredds.dataexplorer.oceanobservatories.org/thredds/fileServer/'
-        nc_url = [base_url + i + '#mode=bytes' for i in nc_files]  # create urls for download
+        # get datasets
+        ds = _get_datasets(site, start_date, end_date)
+        ds_orig = ds.copy()
 
-        # load datasets
-        ds = []
-        for i, f in (enumerate(tq(nc_url, desc='Downloading datasets'))):
-            r = requests.get(f, timeout=(3.05, 120))
-            if r.ok:
-                ds.append(xr.open_dataset(io.BytesIO(r.content)))
-                ds[i].load()
-
-        # some renaming and new variables
         for i, d in enumerate(ds):
+            # compute derived variables
             ds[i] = _comput_tsrho(d)
+            # save metadata to include in final dataset
             global_attrs, var_attrs = _get_attrs(ds[i])
 
         # QC nitrate data and remove short datasets
-        ds = ParallelTqdm(n_jobs=n_jobs, desc='QC')(delayed(nutnr_qc)(d) for d in ds)
-        mask = [i for i, d in enumerate(ds) if len(d.time) > 10]
-        ds = [ds[i] for i in mask]
+        deployments, total_data, good_data, step_1, step_2, step_3, step_4 = [], [], [], [], [], [], []
+        for i, d in enumerate(tq(ds, desc='QCing datasets')):
+            deployments.append(np.unique(d.deployment)[0])
+            total_data.append(d.time.size)
+            out = _nutnr_qc_wrapper(d)
+            ds[i] = out[0]
+            good_data.append(out[1])
+            step_1.append(out[2])
+            step_2.append(out[3])
+            step_3.append(out[4])
+            step_4.append(out[5])
+
+        qc_results = pd.DataFrame(
+            {
+                'deployment': deployments,
+                'total_data': total_data,
+                'good_data': good_data,
+                'bad_data': np.subtract(np.array(total_data), np.array(good_data)),
+                'bad_salinity': step_1,
+                'bad_values': step_2,
+                'bad_fit': step_3,
+                'bad_slope': step_4,
+            },
+            columns=['deployment', 'total_data', 'good_data', 'bad_data', 'bad_salinity', 'bad_values', 'bad_fit', 'bad_slope'],
+        )
+
+        qc_results.to_csv(os.path.join(out_path, f'{site}_qc_results.csv'))
+
+        # remove datasets with no data after QC
+        for i, d in enumerate(ds):
+            if d.time.size == 0:
+                ds.pop(i)
+                print(f"Deployment {ds_orig[i].deployment.values[0]} removed due to lack of data after QC.")
+        ds_qced = ds.copy()
 
         # find minimum and maximum depth bins over all nitrate data
         sur = np.min(xr.concat(ds, dim='time')['depth'])
@@ -428,6 +489,7 @@ if __name__ == '__main__':
         times = []
         for d in tq(ds, desc='Splitting and binning profiles'):
             deployments.append(split_profiles(d))
+            # print(deployments[-1])
             profiles = []
             profile_times = []
             for profile in deployments[-1]:
@@ -438,19 +500,72 @@ if __name__ == '__main__':
             times.append(xr.DataArray(profile_times, dims='time'))
         deployments = [xr.concat(profiles, profile_times) for profiles, profile_times in zip(deployments, times)]
 
+        # remove datasets with less than 10 profiles data
+        for i, d in enumerate(deployments):
+            if d.time.size < 10:
+                deployments.pop(i)
+                print(f"Deployment {d.deployment.mean().values} removed due to having less than 10 profiles after QC and binning.")
+
         # concatenate binned datasets
         ds_bin = xr.concat(deployments, dim='time')
         ds_bin = ds_bin.drop_duplicates('time', keep='first')
         ds_bin = ds_bin.where(~np.isinf(ds_bin.salinity_corrected_nitrate))
         ds_bin = _assign_attrs(ds_bin, global_attrs, var_attrs)
+        ds_bin = _drop_unused_vars(ds_bin)
 
-        # setup output folders
-        if not os.path.exists(out_path):
-            os.mkdir(out_path)
-        if not os.path.exists(os.path.join(out_path, 'raw')):
-            os.mkdir(os.path.join(out_path, 'raw'))
-        if not os.path.exists(os.path.join(out_path, 'deps')):
-            os.mkdir(os.path.join(out_path, 'deps'))
+        if site == 'CE01ISSP':
+            ds_bin = ds_bin.where(ds_bin.deployment != 20, drop=True)
+
+        if site == 'CE01ISSP':
+            # custom baseline subtractions for deployments at inshore, based on nitrate-density relationship and some overlapping bottle samples
+            for i, dep in enumerate(deployments):
+                d = np.unique(dep.deployment)[0]
+                if d == 1:
+                    baseline = 10
+                if d == 2:
+                    baseline = -4
+                elif d == 5:
+                    baseline = 2
+                elif d == 6:
+                    baseline = 12
+                elif d == 7:
+                    baseline = 1
+                elif d == 8:
+                    baseline = 3
+                elif d == 10:
+                    baseline = -2
+                elif d == 14:
+                    baseline = 0
+                elif d == 13:
+                    baseline = -2
+                elif d == 15:
+                    baseline = 2
+                elif d == 16:
+                    baseline = 2
+                elif d == 17:
+                    baseline = 3
+                elif d == 19:
+                    baseline = 5
+                elif d == 21:
+                    baseline = 1
+                else:
+                    baseline = 0
+                deployments[i]['salinity_corrected_nitrate'] = dep['salinity_corrected_nitrate'] - baseline
+        elif site == 'CE02SHSP':
+            for i, d in enumerate(deployments):
+                baseline = d.where(d.depth < 2).salinity_corrected_nitrate.median().values
+                deployments[i]['salinity_corrected_nitrate'] = d['salinity_corrected_nitrate'] - baseline
+
+        ds_bin_baseline_subtracted = xr.concat(deployments, dim='time')
+        ds_bin_baseline_subtracted = _assign_attrs(ds_bin_baseline_subtracted, global_attrs, var_attrs)
+        ds_bin_baseline_subtracted = _drop_unused_vars(ds_bin_baseline_subtracted)
+
+        if site == 'CE01ISSP':
+            ds_bin_baseline_subtracted = ds_bin_baseline_subtracted.where(ds_bin_baseline_subtracted.deployment != 20, drop=True)
+
+        print("Saving datasets...", end='', flush=True)
+
+        # save start and end dates for combined datasets
         if datetime.strptime(start_date, '%Y-%m-%d') < pd.to_datetime(pd.Timestamp(ds_bin.time.min().values)):
             save_start_date = pd.to_datetime(pd.Timestamp(ds_bin.time.min().values))
             save_start_date = save_start_date.strftime('%Y-%m-%d')
@@ -461,15 +576,41 @@ if __name__ == '__main__':
             save_end_date = save_end_date.strftime('%Y-%m-%d')
         else:
             save_end_date = end_date
-        out_file = site + '_nitrate_binned_' + save_start_date + '_' + save_end_date + '.nc'
 
-        # save output files
+        # save binned data
+        out_file = site + '_nitrate_binned_' + save_start_date + '_' + save_end_date + '.nc'
         ds_bin.to_netcdf(os.path.join(out_path, out_file))
         ds_bin.close()
-        for d in ds:
-            save_start_date = pd.to_datetime(pd.Timestamp(d.time.min().values))
-            save_end_date = pd.to_datetime(pd.Timestamp(d.time.max().values))
-            d.to_netcdf(os.path.join(out_path, f'raw/{site}_dep{d.deployment[0]:02.0f}_{save_start_date}_{save_end_date}.nc'), mode='w')
-        # for d in deployments:
+
+        # save binned and baseline subtracted data
+        out_file = site + '_nitrate_binned_baseline_subtracted_' + save_start_date + '_' + save_end_date + '.nc'
+        ds_bin_baseline_subtracted.to_netcdf(os.path.join(out_path, out_file))
+        ds_bin_baseline_subtracted.close()
+
+        # save qced, unbinned datasets
+        # for i, d in enumerate(ds_qced):
         #     deployment = np.unique(d.deployment)[0]
-        #     d.to_netcdf(os.path.join(out_path, f'deps/dep{deployment:02.0f}_binned.nc'), mode='w')
+        #     deployment = f'{deployment:02.0f}'
+        #     d.to_netcdf(os.path.join(out_path, f'qced/{site}_dep{deployment}_nitrate_qced_{save_start_date}_{save_end_date}.nc'), mode='w')
+
+        # save qced, binned datasets
+        # for d in deployments:
+        #     if d.time.size == 0:
+        #         deployment = "unknown"
+        #     else:
+        #         deployment = np.unique(d.deployment)[0]
+        #         deployment = f'{deployment:02.0f}'
+        #     save_start_date = pd.to_datetime(pd.Timestamp(d.time.min().values))
+        #     save_start_date = save_start_date.strftime('%Y-%m-%d')
+        #     save_end_date = pd.to_datetime(pd.Timestamp(d.time.max().values))
+        #     save_end_date = save_end_date.strftime('%Y-%m-%d')
+        #     d.to_netcdf(os.path.join(out_path, f'binned/{site}_dep{deployment}_nitrate_binned_baseline_subtracted_{save_start_date}_{save_end_date}.nc'), mode='w')
+
+        # save raw datasets
+        for d in ds_orig:
+            save_start_date = pd.to_datetime(pd.Timestamp(d.time.min().values))
+            save_start_date = save_start_date.strftime('%Y-%m-%d')
+            save_end_date = pd.to_datetime(pd.Timestamp(d.time.max().values))
+            save_end_date = save_end_date.strftime('%Y-%m-%d')
+            d.to_netcdf(os.path.join(out_path, f'raw/{site}_dep{d.deployment[0]:02.0f}_{save_start_date}_{save_end_date}.nc'), mode='w')
+        print(f"done! {site} data saved to {out_path}.")
