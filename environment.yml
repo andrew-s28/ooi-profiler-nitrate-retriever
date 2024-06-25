@@ -11,7 +11,7 @@ dependencies:
     - beautifulsoup4
     - flox
     - gsw
-    - joblib
+    - matplotlib
     - requests
     - scipy
     - tqdm
