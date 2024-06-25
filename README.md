@@ -27,7 +27,7 @@ Assuming you have [Python](https://docs.python.org/3/) and [conda](https://conda
 
 The only stations currently implemented are the [Oregon Inshore Surface Piercing Profiler (CE01ISSP)](https://oceanobservatories.org/site/ce01issp/) and the [Oregon Shelf Surface Piercing Profiler Mooring (CE02SHSP)](https://oceanobservatories.org/site/ce02shsp/). This script accesses the [NUTNRJ dataset](https://oceanobservatories.org/instrument-series/nutnrj/), which includes *in situ* nitrate concentration data as well as typical oceanographic data (e.g., salinity, temperature, and density). Both a binned dataset and the raw data without any modification are saved to the local machine.
 
-> :warning: **The QC and binning processes are resource intensive**: The QC process requires running a least squares regression on every observation, of which there can be hundreds of thousands. The binning process requires using the groupby operation, [which is expensive in xarray](https://docs.xarray.dev/en/v2023.06.0/user-guide/dask.html#optimization-tips). Several speedups have been implemented (namely, using [joblib](https://joblib.readthedocs.io/en/stable/) to parallelize the regression and [flox](https://flox.readthedocs.io/en/latest/) to speed up the grouping), but the code can still take over an hour to finish if downloading all available data onto a typical consumer machine.
+> :warning: **The binning process is resource intensive**: The binning process requires using the groupby operation, [which is expensive in xarray](https://docs.xarray.dev/en/v2023.06.0/user-guide/dask.html#optimization-tips). Optimization using [flox](https://flox.readthedocs.io/en/latest/) to speed up the groupby has been implemented, but the code can still take ten to twenty minutes to finish if downloading all available data onto a typical consumer machine.
 
 Only a site name is required. The only currently implemented sites are [CE01ISSP](https://oceanobservatories.org/site/ce01issp/) and [CE02SHSP](https://oceanobservatories.org/site/ce02shsp/). Separate sites by a space to get data from more than one:
 ```
@@ -57,6 +57,10 @@ options:
   -n [njobs], --njobs [njobs]
                         number of jobs to run in parallel when running quality control - see joblib.Parallel docs for more details
 ```
+
+## Example
+
+You can view an interactive Python notebook in the [examples directory](https://github.com/andrew-s28/ooi-profiler-nitrate-retriever/tree/main/examples) that goes through each step used in the data retriever script. After cloning the repository and setting up your environment, simply open and run the notebook `ooi_profiler_nitrate_analysis.ipynb` to view the steps taken in the access, quality control, binning, and validation of OOI profiler nitrate datasets.
 
 ## License
 
