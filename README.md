@@ -7,22 +7,18 @@ This package simplifies the retrieval of *in situ* nitrate data from [Ocean Obse
 It is recommended to use [uv](https://docs.astral.sh/uv/) to run this script:
 
 1. Clone the repository and switch to the directory:
-
   ```bash
   git clone https://github.com/andrew-s28/ooi-profiler-nitrate-retriever.git
   cd ooi-profiler-nitrate-retriever/
   ```
 
 2. Run the script directly with [uv run](https://docs.astral.sh/uv/reference/cli/#uv-run):
-
   ```bash
   uv run ./scripts/retrieve_profiler_data.py CE01ISSP -s 2017-08-15 -e 2020-12-16 -p ./data
   ```
-
   uv handles all of the dependencies auto-magically!
 
 3. If you instead prefer to use a virtual environment, you can also use [uv sync](https://docs.astral.sh/uv/reference/cli/#uv-sync) for that:
-
   ```bash
   uv sync
   .venv/bin/activate
