@@ -9,14 +9,14 @@ It is recommended to use [uv](https://docs.astral.sh/uv/) to run this script:
 1. Clone the repository and switch to the directory:
 
   ```bash
-  $ git clone https://github.com/andrew-s28/ooi-profiler-nitrate-retriever.git
-  $ cd ooi-profiler-nitrate-retriever/
+  git clone https://github.com/andrew-s28/ooi-profiler-nitrate-retriever.git
+  cd ooi-profiler-nitrate-retriever/
   ```
 
 2. Run the script directly with [uv run](https://docs.astral.sh/uv/reference/cli/#uv-run):
 
   ```bash
-  $ uv run ./scripts/retrieve_profiler_data.py CE01ISSP -s 2017-08-15 -e 2020-12-16 -p ./data
+  uv run ./scripts/retrieve_profiler_data.py CE01ISSP -s 2017-08-15 -e 2020-12-16 -p ./data
   ```
 
   uv handles all of the dependencies auto-magically!
@@ -24,9 +24,9 @@ It is recommended to use [uv](https://docs.astral.sh/uv/) to run this script:
 3. If you instead prefer to use a virtual environment, you can also use [uv sync](https://docs.astral.sh/uv/reference/cli/#uv-sync) for that:
 
   ```bash
-  $ uv sync
-  $ .venv/bin/activate
-  $ python ./scripts/retrieve_profiler_data.py CE01ISSP -s 2017-08-15 -e 2020-12-16 -p ./data
+  uv sync
+  .venv/bin/activate
+  python ./scripts/retrieve_profiler_data.py CE01ISSP -s 2017-08-15 -e 2020-12-16 -p ./data
   ```
 
 You can also use pip or conda and the included `requirements.txt` file.
@@ -40,13 +40,13 @@ The only stations currently implemented are the [Oregon Inshore Surface Piercing
 Only a site name is required. The only currently implemented sites are [CE01ISSP](https://oceanobservatories.org/site/ce01issp/) and [CE02SHSP](https://oceanobservatories.org/site/ce02shsp/). Separate sites by a space to get data from more than one:
 
 ```bash
-$ uv run ./scripts/retrieve_profiler_data.py CE01ISSP CE02SHSP
+uv run ./scripts/retrieve_profiler_data.py CE01ISSP CE02SHSP
 ```
 
 Find help using the `--help` flag:
 
 ```bash
-$ uv run ./scripts/retrieve_profiler_data.py --help
+uv run ./scripts/retrieve_profiler_data.py --help
 ```
 ```
 usage: retrieve_profiler_data.py [-h] [-p [path]] [-s [start]] [-e [end]] site [site ...]
