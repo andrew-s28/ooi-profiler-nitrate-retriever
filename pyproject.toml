@@ -1,0 +1,65 @@
+[project]
+name = "ooi-profiler-nitrate-retriever"
+version = "0.1.0"
+description = "A command line tool to retrive, quality-control, and bin nitrate data from OOI Endurance Array profiler datasets."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "beautifulsoup4>=4.13.3",
+    "flox>=0.9.10",
+    "gsw>=3.6.19",
+    "numpy>=2.0.2",
+    "pandas>=2.2.3",
+    "requests>=2.32.3",
+    "tqdm>=4.67.1",
+    "xarray[accel,io,parallel]>=2024.7.0",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.2.0",
+]
+
+[tool.uv]
+exclude-newer = "2025-03-25T00:00:00Z"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "F",    # Pyflakes
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "PIE",  # flake8-pie
+    "TID",  # flake8-tidy-imports (absolute imports)
+    "PGH",  # pygrep-hooks
+    "PERF", # Perflint
+    "RUF",
+]
+ignore = [
+    #### modules
+    "C90", # mccabe complexity
+    "DJ",  # django
+
+    #### specific rules
+    "D401",   # non-imperative-mood
+    "D404",   # docstring-starts-with-this
+    "DTZ001", # call-datetime-without-tzinfo
+    "DTZ007", # call-datetime-strptime-without-zone
+    "E501",   # line-too-long
+    "FBT001", # boolean-type-hint-positional-argument
+    "FBT002", # boolean-default-value-positional-argument
+    "FBT003", # boolean-positional-value-in-call
+    "PD011",  # pandas-use-of-dot-values
+    "PLR0913",# too-many-arguments
+    "PLR2004",# magic-value-comparison
+    "TRY003", # external messages in exceptions are too verbose
+    "TD002",  # missing-todo-author
+    "TD003",  # missing-todo-link
+    "FIX002", # line-contains-todo
+]
